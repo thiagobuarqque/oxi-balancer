@@ -1,6 +1,10 @@
+pub mod app;
+pub mod config;
+
+use crate::config::setup_config_provider;
 use log::info;
 use std::env;
-use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
@@ -14,7 +18,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addresses = Vec::from(&args[1..]);
 
-    info!("Redirecting traffic to backend services {:?}", addresses.clone());
+    info!(
+        "Redirecting traffic to backend services {:?}",
+        addresses.clone()
+    );
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", 8080)).await?;
 
@@ -30,12 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let mut outbound = match TcpStream::connect(addr.clone()).await {
                 Ok(mut outbound) => {
-
                     if let Err(e) = copy_bidirectional(&mut socket, &mut outbound).await {
                         println!("Failed to transfer; error={e}");
                     }
-
-                },
+                }
                 Err(e) => {
                     println!("Failed to connect to server {}", addr);
                     return;
