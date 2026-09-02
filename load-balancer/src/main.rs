@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Err(e) => {
-                    println!("Failed to connect to server {}", addr);
+                    println!("Failed to connect to server {}\nMessage: {e}", addr);
                     return;
                 }
             };
