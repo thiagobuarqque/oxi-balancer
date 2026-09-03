@@ -10,7 +10,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Missing port number argument");
     }
 
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", args[1])).await?;
+    let port = args[1].clone().parse::<u16>()?;
+
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
 
     loop {
         let (mut socket, _) = listener.accept().await?;
@@ -31,7 +33,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 // Write the data back
-                if let Err(e) = socket.write_all(&buf[0..n]).await {
+                let prefix = format!("Server at {} says: ", port);
+
+                let mut message = Vec::from(prefix.as_bytes());
+
+                message.extend_from_slice(&buf);
+
+                if let Err(e) = socket.write_all(&message).await {
                     eprintln!("failed to write to socket; err = {:?}", e);
                     return;
                 }
