@@ -1,6 +1,11 @@
-use std::env;
+use std::{env, thread};
+use std::thread::Thread;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::time::sleep;
+use log::info;
+use rand::RngExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,6 +38,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 // Write the data back
+
+                let random_millis: u64 = rand::random_range(500..=3000);
+
+                info!("Sleeping for {}ms...", random_millis);
+
+                sleep(Duration::from_millis(random_millis)).await;
+
                 let prefix = format!("Server at {} says: ", port);
 
                 let mut message = Vec::from(prefix.as_bytes());
