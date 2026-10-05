@@ -51,7 +51,7 @@ impl Service {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ServiceStatus {
     HEALTHY,
     UNHEALTHY,

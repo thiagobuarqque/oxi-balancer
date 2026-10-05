@@ -1,6 +1,8 @@
 pub mod app;
 pub mod config;
 mod service;
+mod service_picker;
+mod round_robin_service_picker;
 
 use crate::app::App;
 use crate::config::{Algorithm, Config};
