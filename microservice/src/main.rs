@@ -1,11 +1,11 @@
-use std::{env, thread};
+use log::info;
+use rand::RngExt;
 use std::thread::Thread;
 use std::time::Duration;
+use std::{env, thread};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::time::sleep;
-use log::info;
-use rand::RngExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU32, Ordering};
 use log::{debug, info};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 pub struct Service {
     address: String,
@@ -41,12 +41,10 @@ impl Service {
     }
 
     pub fn increment_connections_count(&self) {
-        debug!("Increment connection count for: {}", self.address);
         self.connections_count.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn decrement_connections_count(&self) {
-        debug!("Decrementing connection count for: {}", self.address);
         self.connections_count.fetch_sub(1, Ordering::Relaxed);
     }
 }

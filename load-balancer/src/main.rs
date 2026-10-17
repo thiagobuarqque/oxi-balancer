@@ -1,15 +1,15 @@
 pub mod app;
 pub mod config;
+mod round_robin_service_picker;
 mod service;
 mod service_picker;
-mod round_robin_service_picker;
 
 use crate::app::App;
 use crate::config::{Algorithm, Config};
 use crate::service::Service;
 use log::{debug, info};
 use std::env;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -29,99 +29,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addresses.clone()
     );
 
-    let app = Arc::new(App::new(
+    let mut app = App::new(
         Config::new(Algorithm::RoundRobin),
         to_services(addresses.as_slice()),
-    ));
+    );
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", 8080)).await?;
 
-    let mut services_index = 0;
-
     loop {
-        let (mut socket, _) = listener.accept().await?;
+        let (socket, client_address) = listener.accept().await?;
+        let Some(index) = app.get_service_index(client_address) else {
+            continue;
+        };
+        let services = app.get_services();
 
-        let _app = Arc::clone(&app);
-
-        tokio::spawn(async move {
-            let (services, index) = {
-                let services = _app.get_services();
-                let index = services_index % services.len();
-
-                (services, index)
-            };
-
-            let service = services.get(services_index).unwrap();
-
-            // TODO: handle ignoring UNHEALTHY service
-
-            let address = {
-                let service_guard = service.lock().unwrap();
-
-                let address = service_guard.address().to_string();
-
-                address
-            };
-
-            debug!("Redirecting user TCP session to {:?}", address);
-
-            match TcpStream::connect(address).await {
-                Ok(mut outbound) => {
-                    {
-                        let service_guard = service.lock().unwrap();
-
-                        service_guard.increment_connections_count();
-
-                        drop(service_guard);
-
-                        print_servers(_app.clone());
-                    };
-
-                    match copy_bidirectional(&mut socket, &mut outbound).await {
-                        Ok((a_count, b_count)) => {
-                            let service_guard = service.lock().unwrap();
-
-                            service_guard.decrement_connections_count();
-
-                            drop(service_guard);
-
-                            print_servers(_app.clone());
-                        }
-                        Err(err) => {
-                            let service_guard = service.lock().unwrap();
-
-                            service_guard.decrement_connections_count();
-
-                            drop(service_guard);
-
-                            print_servers(_app.clone());
-
-                            println!("Failed to transfer; error={err}");
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("Failed to connect to server \nMessage: {e}");
-                }
-            };
-        });
-
-        services_index = (services_index + 1) % addresses.len();
+        tokio::spawn(async move { handle_client(&services[index], socket).await });
     }
 }
 
-fn print_servers(app: Arc<App>) {
-    let services = app.get_services();
+async fn handle_client(target_service: &Mutex<Service>, mut origin_stream: TcpStream) {
+    let address = target_service.lock().unwrap().address().to_string();
 
-    services.iter().for_each(|service| {
-        let service_guard = service.lock().unwrap();
+    debug!("Redirecting user TCP session to {:?}", address);
 
-        println!(
-            "Server: {} | Count: {}",
-            service_guard.address(),
-            service_guard.connections_count()
-        );
-    });
+    match TcpStream::connect(address).await {
+        Ok(mut target_stream) => {
+            // Connection succeeded
+            target_service.lock().unwrap().increment_connections_count();
+
+            match copy_bidirectional(&mut origin_stream, &mut target_stream).await {
+                Ok((a_count, b_count)) => {
+                    // Both directions closed connection
+                    target_service.lock().unwrap().decrement_connections_count();
+
+                    info!(
+                        "Connection closed successfully! | Data a -> b: {a_count} | Data b -> a: {b_count}"
+                    );
+                }
+                Err(err) => {
+                    // An error occurred
+                    target_service.lock().unwrap().decrement_connections_count();
+
+                    info!("Failed to transfer; error={err}");
+                }
+            }
+        }
+        Err(e) => {
+            // Failed to connect
+            info!("Failed to connect to server \nMessage: {e}");
+        }
+    }
 }
 
 pub fn to_services(addresses: &[String]) -> Vec<Mutex<Service>> {
