@@ -1,5 +1,6 @@
 pub mod app;
 pub mod config;
+mod least_connection_service_picker;
 mod round_robin_service_picker;
 mod service;
 mod service_picker;
@@ -43,6 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let services = app.get_services();
 
+        services[index].lock().unwrap().increment_connections_count();
+
         tokio::spawn(async move { handle_client(&services[index], socket).await });
     }
 }
@@ -54,9 +57,6 @@ async fn handle_client(target_service: &Mutex<Service>, mut origin_stream: TcpSt
 
     match TcpStream::connect(address).await {
         Ok(mut target_stream) => {
-            // Connection succeeded
-            target_service.lock().unwrap().increment_connections_count();
-
             match copy_bidirectional(&mut origin_stream, &mut target_stream).await {
                 Ok((a_count, b_count)) => {
                     // Both directions closed connection
@@ -76,6 +76,8 @@ async fn handle_client(target_service: &Mutex<Service>, mut origin_stream: TcpSt
         }
         Err(e) => {
             // Failed to connect
+            target_service.lock().unwrap().decrement_connections_count();
+
             info!("Failed to connect to server \nMessage: {e}");
         }
     }

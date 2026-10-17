@@ -1,4 +1,5 @@
 use crate::config::{Algorithm, Config};
+use crate::least_connection_service_picker::LeastConnectionServicePicker;
 use crate::round_robin_service_picker::RoundRobinServicePicker;
 use crate::service::Service;
 use crate::service_picker::ServicePicker;
@@ -13,15 +14,16 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config, services: Vec<Mutex<Service>>) -> Self {
-        let service_picker = match config.algorithm() {
-            Algorithm::RoundRobin => RoundRobinServicePicker::new(),
-            _ => RoundRobinServicePicker::new(),
+        let service_picker: Box<dyn ServicePicker + Send + Sync> = match config.algorithm() {
+            Algorithm::RoundRobin => Box::new(RoundRobinServicePicker::new()),
+            Algorithm::LeastConnection => Box::new(LeastConnectionServicePicker::new()),
+            _ => Box::new(RoundRobinServicePicker::new()),
         };
 
         Self {
             config,
             services: Arc::new(services),
-            service_picker: Box::new(service_picker),
+            service_picker,
         }
     }
 
